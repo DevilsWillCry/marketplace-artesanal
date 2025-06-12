@@ -1,0 +1,15 @@
+// Configura TypeScript: habilita strict mode, define "outDir" (ej: ./dist), y ajusta módulos para ES6.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",  // ¡Esta línea es crucial! 
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
