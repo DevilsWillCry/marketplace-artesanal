@@ -1,0 +1,53 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+log/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDEs/Editors
+.vscode/
+.idea/
+
+# Build outputs
+dist/
+build/
+tmp/
+temp/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# PM2
+pids/
+*.pid
+*.seed
+
+# MongoDB
+*.mongodb
+*.mongo
+*.json~  # backups o dumps temporales
+dump/
+data/
+
+# Optional: Prisma
+prisma/migrations/
+
+# Misc
+*.swp
