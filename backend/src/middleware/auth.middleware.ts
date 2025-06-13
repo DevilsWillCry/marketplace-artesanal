@@ -8,21 +8,30 @@ export const authMiddleware = async (
   next: NextFunction
 ) => {
   try {
+
+    //* 1. Obtener token del header de la solicitud
     const token = req.header("Authorization")?.replace("Bearer ", "");
 
     if (!token) {
       throw new Error("Token de autorización no proporcionado.");
     }
 
-    // Verificar token y obtener usuario
+    //* 2. Verificar token y obtener usuario
     const decoded = verifyToken(token);
     const user = await User.findById(decoded.id).select("-password -refreshTokens");
-    console.log(user)
 
     if (!user) throw new Error("Usuario no encontrado.");
 
-    req.user = user; // Agregar el id del usuario al objeto de solicitud
-    next();
+    //* 3. Agregar usuario al objeto de solicitud
+
+    (req as any).user = user;
+    // Imprimir si el request tiene un user
+    console.log("Este es  el user: ",(req as any).user);
+
+    /* 
+    */
+   next();
+
     
   } catch (error) {
     res
