@@ -20,15 +20,26 @@ marketplace-artesanal/
 │   │   │   ├── user.model.ts
 │   │   │   ├── product.model.ts
 │   │   │   └── interfaces/   # Interfaces TypeScript
+│   │   │       └── TokenPayload.ts
 │   │   ├── routes/           # Definición de rutas
 │   │   │   ├── api.routes.ts
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── product.routes.ts
 │   │   │   └── index.ts
 │   │   ├── middleware/       # Middlewares
 │   │   │   ├── auth.middleware.ts
+│   │   │   ├── admin.middleware.ts
 │   │   │   └── error.middleware.ts
 │   │   ├── utils/            # Utilidades
+│   │   │   ├── auth.ts
+│   │   │   ├── emailSender.ts
+│   │   │   ├── rateLimiter.ts
 │   │   │   ├── logger.ts
 │   │   │   └── helpers.ts
+│   │   ├── validators/       # Validadores
+│   │   │   └── product.validator.ts
+│   │   ├── types/            # Tipos personalizados
+│   │   │   ├── extended.d.ts
 │   │   ├── app.ts            # Configuración principal
 │   │   └── server.ts         # Punto de entrada
 │   ├── .env

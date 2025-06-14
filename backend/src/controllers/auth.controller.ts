@@ -17,6 +17,8 @@ const loginSchema = z.object({
   password: z.string().min(1, "La contraseña es requerida"),
 });
 
+//! ---------------------------------------------------------------------------------------- !//
+//* Controlador de refresco de token
 export const refreshToken = async (
   req: Request,
   res: Response
@@ -33,7 +35,6 @@ export const refreshToken = async (
 
     //* 2. Verificar el token JWT.
     const decoded = verifyToken(refreshToken) as { id: string };
-    console.log(decoded);
 
     //* 3. Generar nuevos tokens
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
@@ -60,6 +61,7 @@ export const refreshToken = async (
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+//! ---------------------------------------------------------------------------------------- !//
 
 //! ---------------------------------------------------------------------------------------- !//
 //* Controlador de registro de usuario
@@ -193,7 +195,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 export const logout = async(req: Request, res: Response): Promise<void> => {
   try {
 
-    const userId = (req as any).user?._id;        //* Obtiene el id del authMiddleware
+    const userId = req.user?._id;         //* Obtiene el id del authMiddleware
     const { refreshToken } = req.body;    //* Obtiene el refreshToken desde el cuerpo de la solicitud
 
     if (!userId) {
@@ -214,7 +216,7 @@ export const logout = async(req: Request, res: Response): Promise<void> => {
   }
 }
 //! ---------------------------------------------------------------------------------------- !//
-/*
+
 //! ---------------------------------------------------------------------------------------- !//
 //? Opcional: logout de todos los dispositivos
 export const logoutAll = async(req: Request, res: Response): Promise<void> => {
@@ -232,4 +234,4 @@ export const logoutAll = async(req: Request, res: Response): Promise<void> => {
   }
 }
 //! ---------------------------------------------------------------------------------------- !//
-*/
+

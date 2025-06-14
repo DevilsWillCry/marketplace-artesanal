@@ -18,6 +18,8 @@ description: Notas Backend de Marketplace Artesanal
 - [Paso 4. Arrancar el Servidor.](#paso-4-arrancar-el-servidor)
 - [Paso 5. Conexión a MongoDB + Primer Modelo (User).](#paso-5-conexión-a-mongodb--primer-modelo-user)
 - [Flujo Completo de Registro/Login Mejorado](#flujo-completo-de-registrologin-mejorado)
+- [📌 Endpoints de Productos](#-endpoints-de-productos)
+- [📌 Endpoints de Autenticación](#-endpoints-de-autenticación)
 
 ----------
 ### Paso 1. Importaciones Básicas.
@@ -298,3 +300,30 @@ app.get('/', async (req: Request, res: Response) => {
 [Volver](#tabla-de-contenido)
 
 ![alt text](image.png)
+
+
+### 📌 Endpoints de Productos
+Base Path: /api/products
+
+| Método | Endpoint | Descripción | Acceso | Finalizado |
+| --- | --- | --- | --- | --- |
+| GET | / | Obtiene todos los productos | Público | ✅ |
+| GET | /search | Busqueda por nombre/descripción | Público | ✅ |
+| GET | /:id | Detalles de un producto específico | Público | ✅ |
+| POST | / | Crea un nuevo producto | Privada Auth | ✅ |
+| PUT | /:id | Actualizar un producto | Privada Auth/Admin |
+| DELETE | /:id | Borrado lógico(isActive: false) | Privada Auth/Admin |
+| GET | /artisan/:artisanId | Productos de un artesando especifico | Público |
+| PATCH | /:id/stock | Ajustar sotck(ej. venta o reposición) | Privada Auth |
+| GET | /categories | Lista de categorias dispnibles | Público |
+
+### 📌 Endpoints de Autenticación
+Base Path: /api/auth
+
+| Método | Endpoint | Descripción | Acceso | Finalizado |
+| --- | --- | --- | --- | --- |
+| POST | /register | Registro de usuarios | Público | ✅ |
+| POST | /login | Inicio de sesión | Público | ✅ |
+| POST | /refresh-token | Refresco de tokens | Privada Auth | ✅ |
+| POST | /logout | Cierre de sesión | Privada Auth | ✅ |
+| POST | /logout-all | Cierre de sesión en todos los dispositivos |  Privada Auth | ✅ |

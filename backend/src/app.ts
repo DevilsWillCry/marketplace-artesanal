@@ -3,15 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { config } from 'dotenv';
 import { connectDB, dbStatus } from './config/database';
 import authRoutes from './routes/auth.routes'
-import rateLimit from 'express-rate-limit';
-
-
-// Configuración de rate limit para la API, evitar solicitudes excesivas
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 100, // Limite de solicitudes por IP
-    message: 'Demasiadas solicitudes, por favor intenta nuevamente despues de 15 minutos'
-})
+import productRouter from './routes/product.routes'
 
 // Cargar variables de entorno de .env
 config();
@@ -25,9 +17,9 @@ const app = express();
 // Middleware para parsear JSON
 app.use(express.json());
 
-//  Middleware de rate limit y Rutas de la API
-app.use('/api/auth', limiter);
+//Rutas de la API - Auth Usuarios - Productos
 app.use('/api/auth', authRoutes);
+app.use('/api/products', productRouter);
 
 // Rutas de la API con respuesta JSON
 app.get('/', async (req: Request, res: Response) => {

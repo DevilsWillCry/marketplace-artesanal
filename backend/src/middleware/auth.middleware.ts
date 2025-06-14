@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../utils/auth";
 import { User } from "../models/user.model";
 
+
+//* Middleware de autenticación
 export const authMiddleware = async (
   req: Request,
   res: Response,
@@ -13,7 +15,10 @@ export const authMiddleware = async (
     const token = req.header("Authorization")?.replace("Bearer ", "");
 
     if (!token) {
-      throw new Error("Token de autorización no proporcionado.");
+      res
+        .status(401)
+        .json({ message: "Acceso no autorizado", details: null });
+      return;
     }
 
     //* 2. Verificar token y obtener usuario
@@ -24,12 +29,7 @@ export const authMiddleware = async (
 
     //* 3. Agregar usuario al objeto de solicitud
 
-    (req as any).user = user;
-    // Imprimir si el request tiene un user
-    console.log("Este es  el user: ",(req as any).user);
-
-    /* 
-    */
+   req.user = user;
    next();
 
     
@@ -37,7 +37,7 @@ export const authMiddleware = async (
     res
       .status(401)
       .json({
-        message: "Acceso no autorizado.",
+        message: "Token invalido.",
         details:
           error instanceof Error ? error.message : null,
       });
