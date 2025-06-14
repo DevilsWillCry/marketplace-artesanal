@@ -311,7 +311,7 @@ Base Path: /api/products
 | GET | /search | Busqueda por nombre/descripción | Público | ✅ |
 | GET | /:id | Detalles de un producto específico | Público | ✅ |
 | POST | / | Crea un nuevo producto | Privada Auth | ✅ |
-| PUT | /:id | Actualizar un producto | Privada Auth/Admin |
+| PUT | /:id | Actualizar un producto | Privada Auth/Admin | ✅ |
 | DELETE | /:id | Borrado lógico(isActive: false) | Privada Auth/Admin |
 | GET | /artisan/:artisanId | Productos de un artesando especifico | Público |
 | PATCH | /:id/stock | Ajustar sotck(ej. venta o reposición) | Privada Auth |
