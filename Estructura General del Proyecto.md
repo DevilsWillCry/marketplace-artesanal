@@ -1,3 +1,4 @@
+```text
 marketplace-artesanal/
 ├── backend/
 │   ├── src/
@@ -88,3 +89,4 @@ marketplace-artesanal/
 ├── .dockerignore
 ├── docker-compose.yml         # Configuración Docker
 └── README.md
+```
