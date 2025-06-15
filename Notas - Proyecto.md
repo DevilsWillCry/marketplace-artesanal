@@ -342,4 +342,4 @@ Base Path: /api/orders
 | GET | /artisans/orders | Pedidos recibidos por un artesano | Privada Auth | ✖️ |
 | POST | /orders/:id/cancel | Cancelar un pedido | Privada Auth/Admin | ✖️ |
 | GET | /orders/:id/tracking | Obtener el seguimiento de un pedido | Privada Auth | ✖️ |
-| POST | /orders/:id/return | Devolver un pedido pero con validación de plazo | Privada Auth | ✖️ |
+| POST | /orders/:id/return | Devolver un pedido pero con validación de plazo | Privada Auth/Admin | ✖️ |
