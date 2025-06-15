@@ -20,6 +20,7 @@ description: Notas Backend de Marketplace Artesanal
 - [Flujo Completo de Registro/Login Mejorado](#flujo-completo-de-registrologin-mejorado)
 - [📌 Endpoints de Productos](#-endpoints-de-productos)
 - [📌 Endpoints de Autenticación](#-endpoints-de-autenticación)
+- [📌 Endpoints de Pedidos(Orders)](#-endpoints-de-pedidosorders)
 
 ----------
 ### Paso 1. Importaciones Básicas.
@@ -310,12 +311,13 @@ Base Path: /api/products
 | GET | / | Obtiene todos los productos | Público | ✅ |
 | GET | /search | Busqueda por nombre/descripción | Público | ✅ |
 | GET | /:id | Detalles de un producto específico | Público | ✅ |
+| GET | /artisan/:artisanId | Productos de un artesando especifico | Público | ✅ |
+| GET | /categories | Lista de categorias disponibles | Público | ✅ |
 | POST | / | Crea un nuevo producto | Privada Auth | ✅ |
 | PUT | /:id | Actualizar un producto | Privada Auth/Admin | ✅ |
-| DELETE | /:id | Borrado lógico(isActive: false) | Privada Auth/Admin |
-| GET | /artisan/:artisanId | Productos de un artesando especifico | Público |
-| PATCH | /:id/stock | Ajustar sotck(ej. venta o reposición) | Privada Auth |
-| GET | /categories | Lista de categorias dispnibles | Público |
+| DELETE | /:id | Borrado lógico(isActive: false) | Privada Auth/Admin | ✅ |
+| PATCH | /:id/stock | Ajustar sotck(ej. venta o reposición) | Privada Auth | ✅ |
+| POST | /:id/reviews | Permite valoraciones y comentarios de productos | Privada | ✖️ |
 
 ### 📌 Endpoints de Autenticación
 Base Path: /api/auth
@@ -327,3 +329,17 @@ Base Path: /api/auth
 | POST | /refresh-token | Refresco de tokens | Privada Auth | ✅ |
 | POST | /logout | Cierre de sesión | Privada Auth | ✅ |
 | POST | /logout-all | Cierre de sesión en todos los dispositivos |  Privada Auth | ✅ |
+
+### 📌 Endpoints de Pedidos(Orders)
+Base Path: /api/orders
+
+| Método | Endpoint | Descripción | Acceso | Finalizado |
+| --- | --- | --- | --- | --- |
+| POST | /orders | Crea un nuevo pedido | Privada Auth | ✖️ |
+| GET | /orders | Lista de pedidos de un usuario | Privada Auth | ✖️ |
+| GET | /orders/:id | Detalles de un pedido | Privada Auth | ✖️ |
+| PATCH | /orders/:id/status | Actualizar estado (ej. "shipped") | Privada Auth/Admin | ✖️ |
+| GET | /artisans/orders | Pedidos recibidos por un artesano | Privada Auth | ✖️ |
+| POST | /orders/:id/cancel | Cancelar un pedido | Privada Auth/Admin | ✖️ |
+| GET | /orders/:id/tracking | Obtener el seguimiento de un pedido | Privada Auth | ✖️ |
+| POST | /orders/:id/return | Devolver un pedido pero con validación de plazo | Privada Auth | ✖️ |

@@ -20,7 +20,7 @@ export const productAuthMiddleware = async (
     ) {
       res
         .status(401)
-        .json({ message: "No tienes permisos para editar este producto" });
+        .json({ message: "No tienes permisos para editar/eliminar este producto" });
       return;
     }
 

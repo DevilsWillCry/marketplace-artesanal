@@ -78,6 +78,7 @@ export const ProductSearchSchema = z.object({
   maxPrice: z.coerce.number().min(0).optional(),
 });
 
+//* Validación de ID
 export const ProductIdSchema = z.string().refine(
   (id) => {
     return /^[0-9a-fA-F]{24}$/.test(id);
@@ -87,9 +88,41 @@ export const ProductIdSchema = z.string().refine(
   }
 );
 
+//* Validación de producto por artesano
+export const ArtisanProductSchema = z.object({
+  artisanId: z.string().refine((id) => /^[0-9a-fA-F]{24}$/.test(id), {
+    message: "ID de artesano inválido",
+  }),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(10),
+  category: z.string().optional(),
+  status: z.enum(["active", "inactive"]).optional().default("active"),
+});
+
+//*
+export const AdjustStockSchema = z
+  .object({
+    operation: z.enum(["increment", "decrement", "set"]), //* Tipo de operación
+    value: z.number().int().min(0), //* Valor de la operación
+    reason: z.string().min(3).max(100).optional(), //* Ej. "Venta", "Reposición", etc
+  })
+  .refine(
+    (data) => {
+      //* validar que 'value' sea positivo si es 'set'
+      if (data.operation === "set" && data.value <= 0) return false;
+      return true;
+    },
+    {
+      message: "El valor debe ser positivo si la operación es 'set'",
+      path: ["value"],
+    }
+  );
+
 //* Tipos TypeScript inferidos
 export type CreateProductInput = z.infer<typeof CreateProductSchema>;
 export type UpdateProductInput = z.infer<typeof UpdateProductSchema>;
 export type ProductQueryInput = z.infer<typeof ProductQuerySchema>;
 export type ProductSearchInput = z.infer<typeof ProductSearchSchema>;
 export type ProductIdInput = z.infer<typeof ProductIdSchema>;
+export type ArtisanProductInput = z.infer<typeof ArtisanProductSchema>;
+export type AdjustStockInput = z.infer<typeof AdjustStockSchema>;
