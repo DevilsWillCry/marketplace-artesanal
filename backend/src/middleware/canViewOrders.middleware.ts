@@ -10,7 +10,6 @@ export const canViewOrdersMiddleware = async (
     const order = await Order.findById(req.params.id);
     const userId = req.user?._id;
 
-    console.log(order)
 
     if (!order) {
       res.status(404).json({ error: "El pedido no fue encontrado" });

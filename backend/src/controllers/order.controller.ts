@@ -7,6 +7,9 @@ import {
 import { Order } from "../models/order.model";
 import { Product } from "../models/product.model";
 import { ProductIdSchema } from "../validators/product.validator";
+import TokenPayload from "../models/interfaces/TokenPayload";
+import { IUserObject } from "../models/interfaces/IUserObject";
+import { IBuyerObject } from "../models/interfaces/IBuyerObject";
 
 //* Controlador para crear un nuevo pedido
 export const createOrder = async (
@@ -15,14 +18,11 @@ export const createOrder = async (
 ): Promise<void> => {
   try {
     //* 1. Validar datos de entrada.
-    console.log("Entro a la validacion");
     const validatedData = await CreateOrderSchema.parseAsync(req.body);
-    console.log("Termino la validacion");
 
     const buyerId = req.user?._id;
 
     //* 2. Obtener detalles de los productos y calcular total.
-    console.log("Empezo el pedido");
     // Validación de stock y estado del producto
     for (const item of validatedData.items) {
       const product = await Product.findById(item.productId);
@@ -61,7 +61,6 @@ export const createOrder = async (
         };
       })
     );
-    console.log("Termino el pedido");
 
     //* 3. Calcular el total del pedido.
     const total = itemsWithDetails.reduce(
@@ -174,6 +173,15 @@ export const getOrderDetails = async (req: Request, res: Response) => {
     if (!order) {
       res.status(404).json({ error: "Pedido no encontrado" });
       return;
+    }
+
+    //* 3. Filtrar los items del pedido para el artesano
+    if (req.user?._id.toString() !== (order.buyer as unknown as IBuyerObject)._id.toString() && req.user?.role !== "admin") {
+      console.log("ENTRO")
+      order.items = order.items.filter((item) => {
+        const artisan = item.artisan as unknown as IUserObject;
+        return req.user?._id.toString() === artisan._id.toString();
+      });
     }
 
     //* 3. Respuesta estructurada
