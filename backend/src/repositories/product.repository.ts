@@ -1,6 +1,6 @@
 // product.repository.ts
 import { Product, IProduct } from "../models/product.model";
-import { FilterQuery, UpdateQuery } from "mongoose";
+import { UpdateQuery } from "mongoose";
 import { CreateProductInput } from "../validators/product.validator";
 
 //* Clase de repositorio de productos
@@ -49,5 +49,4 @@ export class ProductRepository {
       { new: true }
     );
   }
-  //* Añadir más funciones de repositorio de productos si es necesario
 }

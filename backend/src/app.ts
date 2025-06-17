@@ -3,7 +3,8 @@ import { Request, Response, NextFunction } from 'express';
 import { config } from 'dotenv';
 import { connectDB, dbStatus } from './config/database';
 import authRoutes from './routes/auth.routes'
-import productRouter from './routes/product.routes'
+import productRoutes from './routes/product.routes'
+import orderRoutes from "./routes/order.routes"
 
 // Cargar variables de entorno de .env
 config();
@@ -19,7 +20,9 @@ app.use(express.json());
 
 //Rutas de la API - Auth Usuarios - Productos
 app.use('/api/auth', authRoutes);
-app.use('/api/products', productRouter);
+app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+
 
 // Rutas de la API con respuesta JSON
 app.get('/', async (req: Request, res: Response) => {

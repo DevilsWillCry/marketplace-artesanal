@@ -26,11 +26,16 @@ marketplace-artesanal/
 │   │   │   ├── api.routes.ts
 │   │   │   ├── auth.routes.ts
 │   │   │   ├── product.routes.ts
+│   │   │   ├── order.routes.ts
 │   │   │   └── index.ts
 │   │   ├── middleware/       # Middlewares
 │   │   │   ├── auth.middleware.ts
+│   │   │   ├── product.auth.middleware.ts
 │   │   │   ├── admin.middleware.ts
 │   │   │   └── error.middleware.ts
+│   │   ├── validator/        # Validadores
+│   │   │   ├── order.validator.ts
+│   │   │   └── product.validator.ts
 │   │   ├── utils/            # Utilidades
 │   │   │   ├── auth.ts
 │   │   │   ├── emailSender.ts
@@ -40,7 +45,7 @@ marketplace-artesanal/
 │   │   ├── validators/       # Validadores
 │   │   │   └── product.validator.ts
 │   │   ├── types/            # Tipos personalizados
-│   │   │   ├── extended.d.ts
+│   │   │   └── extended.d.ts
 │   │   ├── app.ts            # Configuración principal
 │   │   └── server.ts         # Punto de entrada
 │   ├── .env
