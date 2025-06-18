@@ -6,7 +6,13 @@ const userSchema = new Schema({
   password: { type: String, required: true },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
-  refreshTokens: [String], // Array de tokens de refresco
+  refreshTokens: [{
+    token: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    expiresAt: { type: Date, required: true },
+    ip: { type: String, required: true },
+    userAgent: { type: String, required: true }
+  }], // Array de tokens de refresco
 }, { timestamps: true });
 
 export const User = model('User', userSchema);

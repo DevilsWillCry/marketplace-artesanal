@@ -1,3 +1,4 @@
+//* src/utils/auth.ts
 import jwt from "jsonwebtoken";
 import { config } from "dotenv";
 import TokenPayload from "../models/interfaces/TokenPayload";
@@ -22,13 +23,13 @@ const REFRESH_TOKEN_EXPIRY = "7d";                       //* 7 dias por defecto 
  */
 export const generateTokens = (userId: string, role: string) => {
 
-  //* constante para el token de acceso
-  const accessToken = jwt.sign({ userId, role }, JWT_SECRET, {
+  //* Generar el token de acceso
+  const accessToken = jwt.sign({ id: userId, role }, JWT_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRY,
   });
  
-  //* constante para el token de actualización
-  const refreshToken = jwt.sign({ id: userId }, JWT_SECRET, {
+  //* Generar el token de actualización 
+  const refreshToken = jwt.sign({ id: userId, role }, JWT_SECRET, {
     expiresIn: REFRESH_TOKEN_EXPIRY,
   });
 

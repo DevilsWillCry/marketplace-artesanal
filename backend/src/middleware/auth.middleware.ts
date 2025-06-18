@@ -1,3 +1,4 @@
+//* src/middleware/auth.middleware.ts
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../utils/auth";
 import { User } from "../models/user.model";
@@ -20,7 +21,6 @@ export const authMiddleware = async (
         .json({ message: "Acceso no autorizado", details: null });
       return;
     }
-
     //* 2. Verificar token y obtener usuario
     const decoded = verifyToken(token);
     const user = await User.findById(decoded.id).select("-password -refreshTokens");

@@ -337,7 +337,7 @@ Base Path: /api/orders
 | --- | --- | --- | --- | --- |
 | POST | /orders | Crea un nuevo pedido | Privada Auth | ✅ |
 | GET | /orders | Lista de pedidos de un usuario | Privada Auth | ✅ |
-| GET | /orders/:id | Detalles de un pedido | Privada Auth | ✖️ |
+| GET | /orders/:id | Detalles de un pedido | Privada Auth/admin | ✅ |
 | PATCH | /orders/:id/status | Actualizar estado (ej. "shipped") | Privada Auth/Admin | ✖️ |
 | GET | /artisans/orders | Pedidos recibidos por un artesano | Privada Auth | ✖️ |
 | POST | /orders/:id/cancel | Cancelar un pedido | Privada Auth/Admin | ✖️ |
