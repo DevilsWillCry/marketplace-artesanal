@@ -7,9 +7,11 @@ export const adminMiddleware = async (
   next: NextFunction
 ) => {
   try {
-    const user = await User.findById(req.userId);
-    if (!user || user?.role !== "admin") {
-      return res.status(401).json({ message: "Acceso no autorizado." });
+    const userId = req.user?._id;
+    const user = await User.findById(userId);
+    if (user?.role !== "admin") {
+      res.status(403).json({ error: "No tienes permiso para realizar esta accion" });
+      return;
     }
     next();
   } catch (error) {

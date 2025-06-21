@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import {
   CreateOrderSchema,
   GetOrderSchema,
+  UpdateOrderSchema,
 } from "../validators/order.validator";
 import { Order } from "../models/order.model";
 import { Product } from "../models/product.model";
@@ -176,8 +177,12 @@ export const getOrderDetails = async (req: Request, res: Response) => {
     }
 
     //* 3. Filtrar los items del pedido para el artesano
-    if (req.user?._id.toString() !== (order.buyer as unknown as IBuyerObject)._id.toString() && req.user?.role !== "admin") {
-      console.log("ENTRO")
+    if (
+      req.user?._id.toString() !==
+        (order.buyer as unknown as IBuyerObject)._id.toString() &&
+      req.user?.role !== "admin"
+    ) {
+      console.log("ENTRO");
       order.items = order.items.filter((item) => {
         const artisan = item.artisan as unknown as IUserObject;
         return req.user?._id.toString() === artisan._id.toString();
@@ -192,6 +197,89 @@ export const getOrderDetails = async (req: Request, res: Response) => {
         //Datos calculado opcional.
         totalItems: order.items.reduce((acc, item) => acc + item.quantity, 0),
       },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: "Error en los parámetros de búsqueda",
+        details: error.errors.map((e) => ({
+          field: e.path[0],
+          message: e.message,
+        })),
+      });
+    }
+  }
+};
+
+export const updateOrderStatus = async (req: Request, res: Response) => {
+  try {
+    //* 1. Validar el ID
+    const { id } = req.params;
+    ProductIdSchema.parse(id); //* <-- Reutilizamos la validación de ID
+    const { status, trackingNumber } = UpdateOrderSchema.parse(req.body);
+
+    //* 2. Validar transicion de estado valida
+    const order = await Order.findById(id);
+
+    if (!order) {
+      res.status(404).json({ error: "Pedido no encontrado" });
+      return;
+    }
+
+    //! ------------------------------------------------------------------------------ !//
+    //TODO: MEJORAR ESTO PORQUE STATUS NO ESTA RECIBIENDO [confirmed o cancelled]
+    const validTransition: Record<string, string[]> = {
+      pending: ["confirmed", "cancelled"],
+      confirmed: ["shipped", "cancelled"],  
+      shipped: ["delivered"], 
+    };
+    //! ------------------------------------------------------------------------------ !//
+
+    if (!validTransition[order.status]?.includes(status)) {
+      res.status(400).json({
+        error: `Transición de estado no valida: ${order.status} -> ${status}`,
+        allowedTransitions: validTransition[order.status] || [],
+      });
+      return;
+    }
+
+    //* 3. Actualizar el pedido
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      {
+        status,
+        ...(trackingNumber && { trackingNumber }), //* Solo si se proporciona el tracking number
+        $push: {
+          history: {
+            status,
+            changeBy: req.user?._id,
+            date: new Date(),
+          },
+        },
+      },
+      { new: true }
+    ).populate("buyer", "name email"); //* Datos básicos del 
+    
+    console.log(updatedOrder)
+
+    //* 4. Notificar al comprador (ejemplo simplificado)
+    if (status === "shipped") {
+      /*
+       * Enviar un correo al comprador con el tracking number
+        if (status === "shipped") {
+        await sendNotificationToBuyer(
+          order.buyer,
+          `Tu pedido #${id} ha sido enviado. Tracking: ${trackingNumber}`
+        );
+        }
+       */
+    }
+
+    //* 5. Respuesta
+    res.json({
+      success: true,
+      message: "Estado del pedido actualizado",
+      data: updatedOrder,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

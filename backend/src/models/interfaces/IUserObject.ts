@@ -1,6 +1,6 @@
-import { Types } from "mongoose";
+import { Schema } from "mongoose";
 
 export interface IUserObject {
-  _id: Types.ObjectId;
+  _id: Schema.Types.ObjectId;
   name: string;
 }

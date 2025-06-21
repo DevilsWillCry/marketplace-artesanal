@@ -34,7 +34,22 @@ export const CreateOrderSchema = z
     status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]).optional(),
   });
 
+
+  export const UpdateOrderSchema = z.object({
+    status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]),
+    trackingNumber: z.string().optional(),
+  }).refine(data => {
+    //* Validar que trackingNumber se envie cuando status = "shipped"
+    if (data.status === "shipped" && !data.trackingNumber) {
+      return false;
+    }
+    return true;
+  }, {
+    message: "El campo trackingNumber es obligatorio cuando el status es 'shipped'",
+    path: ["trackingNumber"]
+  })
   
   //* Tipos TypeScript inferidos
   export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
   export type GetOrderInput = z.infer<typeof GetOrderSchema>;
+  export type UpdateOrderInput = z.infer<typeof UpdateOrderSchema>;

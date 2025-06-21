@@ -33,9 +33,11 @@ export const refreshToken = async (
     //* Obtener el token de refresco de la cookie
     const refreshToken = req.cookies.refreshToken;
 
+    console.log(refreshToken);
+
     //* 1. Verificar si el objeto de token de refresco es valido en la DB
     const user = await User.findOne({
-      "refreshTokens.token": refreshToken.token,
+      "refreshTokens.token": refreshToken,
     });
     if (!user) {
       res.status(401).json({ message: "Token de refresco invalido." });
@@ -43,7 +45,7 @@ export const refreshToken = async (
     }
 
     //* 2. Verificar el token JWT.
-    const decoded = verifyToken(refreshToken.token) as TokenPayload;
+    const decoded = verifyToken(refreshToken) as TokenPayload;
 
     //* 3. Generar nuevos tokens
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
@@ -61,7 +63,7 @@ export const refreshToken = async (
     //* 5. Actualizar en la DB (reemplazar el viejo token por el nuevo).
     //? Primero elimina el token viejo
     await User.findByIdAndUpdate(user._id, {
-      $pull: { refreshTokens: { token: refreshToken.token } },
+      $pull: { refreshTokens: { token: refreshToken } },
     });
 
     //? Luego añade el nuevo
@@ -69,7 +71,15 @@ export const refreshToken = async (
       $push: { refreshTokens: newRefreshTokenEntry },
     });
 
-    //* 6. Enviar los nuevos tokens
+    //* 6. refrescamos la cookie
+    res.cookie("refreshToken", newRefreshTokenEntry.token, {
+      httpOnly: true, // httponly -> solo se puede acceder a la cookie desde el servidor
+      secure: process.env.NODE_ENV === "production" ? true : false, // Poner en true en produccion
+      sameSite: "lax", // lax permite el acceso a la cookie desde cualquier origen
+      expires: newRefreshTokenEntry.expiresAt,
+    });
+
+    //* 7. Enviar los nuevos tokens
     res.status(200).json({
       accessToken: newAccessToken,
       refreshToken: newRefreshTokenEntry,
@@ -127,6 +137,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       user.role
     );
 
+    //* 6. Generar un nuevo objeto de token de refresco
     const newRefreshTokenEntry = {
       token: refreshToken,
       createdAt: new Date(),
@@ -135,13 +146,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       userAgent,
     };
 
-    //* 6. Guardar refreshToken en la base de datos
+    //* 7. Guardar refreshToken en la base de datos
     await User.findByIdAndUpdate(user._id, {
       $push: { refreshTokens: newRefreshTokenEntry }, // Agregar el refreshToken al array
       $slice: -5, // Limitar el array a 5 elementos
     });
 
-    //* 7. Guardar refreshToken en la cookie
+    //* 8. Guardar refreshToken en la cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: false, //* ✅ true en producción (HTTPS), false en desarrollo
@@ -149,10 +160,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días en ms
     });
 
-    //* 8. Excluir password de la respuesta y enviar el resto.
+    //* 9. Excluir password de la respuesta y enviar el resto.
     const { password: _, ...userWithoutPassword } = user.toObject();
 
-    //* 9. Enviar respuesta
+    //* 10. Enviar respuesta
     res.status(201).json({
       message: "Usuario creado con éxito",
       data: {
@@ -160,7 +171,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         tokens: accessToken,
       },
     });
-
   } catch (error) {
     console.error("Error en registro:", error);
     res.status(500).json({ error: "Error interno del servidor" });
@@ -172,7 +182,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 //*  Controlador de inicio de sesión
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-
     //* Obtener ip y userAgent
     const ip = req.ip || req.headers["x-forwarded-for"] || "Desconocido";
     const userAgent = req.get("User-Agent") || "Navegador desconocido";
@@ -226,7 +235,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     //* 7. Guardar refreshToken en la cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: false, //* ✅ true en producción (HTTPS), false en desarrollo
+      secure: process.env.NODE_ENV === "production" ? true : false, //* ✅ true en producción (HTTPS), false en desarrollo
       sameSite: "lax", //* Tambien puedes usar "Strict" o "None" dependiendo tu frontend
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias en ms
     });
@@ -296,7 +305,7 @@ export const logoutAll = async (req: Request, res: Response): Promise<void> => {
     //* 2. Elimina el refreshToken de la cookie
     res.clearCookie("refreshToken", {
       httpOnly: true, //* httponly -> solo se puede acceder a la cookie desde el servidor
-      secure: false, //* Poner en true en produccion
+      secure: process.env.NODE_ENV === "production" ? true : false, //* Poner en true en produccion
       sameSite: "lax", //* lax permite el acceso a la cookie desde cualquier origen
     });
 
