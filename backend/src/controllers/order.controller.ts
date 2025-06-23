@@ -1,16 +1,19 @@
 import { z } from "zod";
 import { Request, Response } from "express";
 import {
+  CancelOrderSchema,
   CreateOrderSchema,
   GetOrderSchema,
+  ReturnOrderSchema,
   UpdateOrderSchema,
 } from "../validators/order.validator";
 import { Order } from "../models/order.model";
 import { Product } from "../models/product.model";
-import { ProductIdSchema } from "../validators/product.validator";
 import TokenPayload from "../models/interfaces/TokenPayload";
 import { IUserObject } from "../models/interfaces/IUserObject";
 import { IBuyerObject } from "../models/interfaces/IBuyerObject";
+import { addDays } from "../utils/dateHelpers";
+import { ObjectIdSchema } from "../validators/id.validator";
 
 //* Controlador para crear un nuevo pedido
 export const createOrder = async (
@@ -111,7 +114,10 @@ export const createOrder = async (
 };
 
 //* Controlador para obtener los pedidos de un usuario
-export const getUserOrders = async (req: Request, res: Response) => {
+export const getUserOrders = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     //* 1. Validar query params.
     const { page, limit, status } = await GetOrderSchema.parseAsync(req.query); //* Validar los query params con Zod
@@ -159,11 +165,14 @@ export const getUserOrders = async (req: Request, res: Response) => {
 };
 
 //* Controlador para obtener los detalles de un pedido
-export const getOrderDetails = async (req: Request, res: Response) => {
+export const getOrderDetails = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     //* 1. Validar el ID
     const { id } = req.params;
-    ProductIdSchema.parse(id); //* <-- Reutilizamos la validación de ID
+    ObjectIdSchema.parse(id);
 
     //* 2. Buscar el pedido con datos poblados
     const order = await Order.findById(id)
@@ -182,7 +191,6 @@ export const getOrderDetails = async (req: Request, res: Response) => {
         (order.buyer as unknown as IBuyerObject)._id.toString() &&
       req.user?.role !== "admin"
     ) {
-      console.log("ENTRO");
       order.items = order.items.filter((item) => {
         const artisan = item.artisan as unknown as IUserObject;
         return req.user?._id.toString() === artisan._id.toString();
@@ -211,12 +219,17 @@ export const getOrderDetails = async (req: Request, res: Response) => {
   }
 };
 
-export const updateOrderStatus = async (req: Request, res: Response) => {
+//* Controlador para actualizar el estado de un pedido
+export const updateOrderStatus = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     //* 1. Validar el ID
     const { id } = req.params;
-    ProductIdSchema.parse(id); //* <-- Reutilizamos la validación de ID
-    const { status, trackingNumber } = UpdateOrderSchema.parse(req.body);
+    ObjectIdSchema.parse(id);
+    const { status, trackingNumber, cancellationReason } =
+      UpdateOrderSchema.parse(req.body);
 
     //* 2. Validar transicion de estado valida
     const order = await Order.findById(id);
@@ -226,41 +239,58 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       return;
     }
 
-    //! ------------------------------------------------------------------------------ !//
-    //TODO: MEJORAR ESTO PORQUE STATUS NO ESTA RECIBIENDO [confirmed o cancelled]
-    const validTransition: Record<string, string[]> = {
-      pending: ["confirmed", "cancelled"],
-      confirmed: ["shipped", "cancelled"],  
-      shipped: ["delivered"], 
+    const validTransitions: Record<string, string[]> = {
+      pending: ["processing", "cancelled"],
+      processing: ["shipped", "cancelled"],
+      shipped: ["delivered"],
+      delivered: [],
+      cancelled: [],
     };
-    //! ------------------------------------------------------------------------------ !//
 
-    if (!validTransition[order.status]?.includes(status)) {
+    console.log(
+      "order.status:",
+      order.status,
+      "status body:",
+      status,
+      "conditional:",
+      !validTransitions[order.status]?.includes(status)
+    );
+
+    if (!validTransitions[order.status]?.includes(status)) {
       res.status(400).json({
         error: `Transición de estado no valida: ${order.status} -> ${status}`,
-        allowedTransitions: validTransition[order.status] || [],
+        allowedTransitions: validTransitions[order.status] || [],
       });
       return;
     }
 
+    if (status === "cancelled") {
+      await Product.updateMany(
+        { _id: { $in: order.items.map((item) => item.product) } },
+        { $inc: { stock: order.items.length } }
+      );
+    }
+
     //* 3. Actualizar el pedido
-    const updatedOrder = await Order.findByIdAndUpdate(
-      id,
-      {
-        status,
-        ...(trackingNumber && { trackingNumber }), //* Solo si se proporciona el tracking number
-        $push: {
-          history: {
-            status,
-            changeBy: req.user?._id,
-            date: new Date(),
-          },
+    const update: any = {
+      $set: {
+        status: status,
+        ...(trackingNumber && { trackingNumber }),
+      },
+      $push: {
+        history: {
+          status,
+          changedBy: req.user._id,
+          date: new Date(),
+          metadata: cancellationReason ? { cancellationReason } : {},
         },
       },
-      { new: true }
-    ).populate("buyer", "name email"); //* Datos básicos del 
-    
-    console.log(updatedOrder)
+    };
+
+    //* actualizar el pedido
+    const updatedOrder = await Order.findByIdAndUpdate(id, update, {
+      new: true,
+    });
 
     //* 4. Notificar al comprador (ejemplo simplificado)
     if (status === "shipped") {
@@ -291,5 +321,276 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         })),
       });
     }
+  }
+};
+
+//* Controlador para cancelar un pedido
+export const cancelOrder = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    //* 1. Validaciones
+    const { id } = req.params;
+    const { reason, refundRequest } = CancelOrderSchema.parse(req.body);
+    const order = await Order.findById(id);
+
+    if (!order) {
+      res.status(404).json({ error: "Pedido no encontrado" });
+      return;
+    }
+
+    //* 2 Revertir stock (si aplica)
+    if (["pending", "processing"].includes(order.status)) {
+      order.items.map((item: any) => {
+        Product.findByIdAndUpdate(item.product, {
+          $inc: { stock: item.quantity },
+        });
+      });
+    }
+
+    //* 3. Actualizar el pedido
+    const updateOrder = await Order.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          status: "cancelled",
+          cancellationReason: reason,
+        },
+        $push: {
+          history: {
+            status: "cancelled",
+            changedBy: req.user._id,
+            date: new Date(),
+            metadata: { cancellationReason: reason },
+          },
+        },
+      },
+      { new: true }
+    ).populate("buyer", "name email");
+
+    //* 4. Notificar al comprador (ejemplo simplificado)
+    /*
+        await sendNotification({
+      to: updatedOrder.buyer.email,
+      subject: "Pedido cancelado",
+      message: `Tu pedido #${id} ha sido cancelado. Razón: ${reason}`
+    });
+
+    */
+
+    //* 5. Iniciar reembolso si fue solicitado (ejemplo con Stripe)
+    /*
+    if (refundRequest && order.paymentMethod !== "cash_on_delivery") {
+      await processRefund(order.paymentId, order.total);
+    }
+    */
+
+    //* 6. Respuesta
+    res.json({
+      success: true,
+      message: "Pedido cancelado",
+      order: updateOrder?.history
+        ? updateOrder.history[updateOrder.history.length - 1]
+        : null,
+      refundInitiated: refundRequest,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: "Error en los parámetros de búsqueda",
+        details: error.errors.map((e) => ({
+          field: e.path[0],
+          message: e.message,
+        })),
+      });
+    }
+  }
+};
+
+//* Controlador para obtener el seguimiento de un pedido
+export const getOrderTracking = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    //* 1. Validar ID.
+    const { id } = req.params;
+    ObjectIdSchema.parse(id);
+
+    //* 2. Buscar pedido con datos esenciales
+    const order = await Order.findById(id)
+      .select("status trackingNumber shippingAddress items.artisan")
+      .populate("items.artisan", "shopName");
+
+    if (!order) {
+      res.status(404).json({ error: "Pedido no encontrado" });
+      return;
+    }
+
+    if (!["shipped", "delivered"].includes(order.status)) {
+      res
+        .status(400)
+        .json({ error: "El pedido aún no ha sido enviado ni entregado" });
+      return;
+    }
+
+    if (!order.trackingNumber) {
+      res
+        .status(400)
+        .json({ error: "El pedido no tiene número de seguimiento asignado" });
+      return;
+    }
+
+    //* 3. Simular datos de seguimiento (o integrar con API real)
+    const trackingData = await generateTrackingData(order);
+
+    //* 4. Respuesta
+    res.json({
+      success: true,
+      tracking: {
+        number: order.trackingNumber,
+        carrier: "FedEx",
+        estimateDelivery: trackingData.estimateDelivery,
+        history: trackingData.history,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: "Error en los parámetros de búsqueda",
+        details: error.errors.map((e) => ({
+          field: e.path[0],
+          message: e.message,
+        })),
+      });
+    }
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+//* Función para simular datos de seguimiento
+const generateTrackingData = async (order: any) => {
+  const statusMap: any = {
+    pending: "En preparación",
+    processing: "En proceso",
+    shipped: "En transito",
+    delivered: "Entregado",
+    cancelled: "Cancelado",
+  };
+
+  return {
+    estimateDelivery: addDays(new Date(), 14),
+    history: [
+      {
+        date: order.createdAt,
+        status: "Confirmado",
+        location: "Tienda del artesano",
+        description: "El pedido fue recibido por el artesano",
+      },
+      {
+        date: addDays(order.createdAt, 2),
+        status: "En preparación",
+        location: "Taller artesanal",
+        description: "El artesano está preparando el pedido",
+      },
+      {
+        date: addDays(order.createdAt, 4),
+        status: "En tránsito",
+        location: "Centro logístico",
+        description: "El pedido fue entregado al transportista",
+      },
+      ...(order.status === "delivered"
+        ? [
+            {
+              date: addDays(order.createdAt, 6),
+              status: "Entregado",
+              location: "Dirección del comprador",
+              description: "El pedido fue entregado al cliente",
+            },
+          ]
+        : []),
+    ],
+  };
+};
+
+//
+export const requestReturn = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    //* 1. Validadciones
+    const { id } = req.params;
+    const validateData = ReturnOrderSchema.parse(req.body);
+    const order = await Order.findById(id);
+
+    if (!order) {
+      res.status(404).json({ error: "Pedido no encontrado" });
+      return;
+    }
+
+    //* 2. Verificar items a devolver
+    const invalidItems = validateData.items.filter(
+      (item) =>
+        !order.items.some(
+          (oi) =>
+            oi.product.toString() === item.productId &&
+            oi.quantity >= item.quantity
+        )
+    );
+
+    if (invalidItems.length > 0) {
+      res
+        .status(400)
+        .json({
+          error:
+            "Algunos productos no perteneces al pedido o no tienen suficiente stock",
+          invalidItems,
+        });
+      return;
+    }
+
+    //* 3. Crear solicitud de devolución
+    const returnRequest = ({
+      requestedBy : req.user?._id,
+      requestedAt : new Date(),
+      status: "pending_preview", //* Estados: pending_preview | approved | rejected
+      metadata: {
+       ...validateData, 
+      }
+    });
+
+    //* 4. Actualizar el pedido
+    await Order.findByIdAndUpdate(id, {
+      $push: { returnRequests: returnRequest },
+    }, { new: true });
+
+    //* 5. Enviar notificaciones
+    /*
+     ? Enviar correo al comprador
+     ? Enviar correo al artesano
+     * await notifyArtisanAndAdmin(updatedOrder)
+     */
+
+    //* 6. Respuesta
+    res.json({
+      success: true,
+      returnRequest,
+      message: "Solicitud de devolución creada exitosamente",
+      deadline: addDays(new Date(), 7).toISOString(), // Fecha limite para procesar la solicitud
+    });
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: "Error en los parámetros de búsqueda",
+        details: error.errors.map((e) => ({
+          field: e.path[0],
+          message: e.message,
+        })),
+      });
+    }
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 };

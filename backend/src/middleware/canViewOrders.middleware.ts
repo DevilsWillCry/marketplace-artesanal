@@ -17,11 +17,11 @@ export const canViewOrdersMiddleware = async (
     }
 
     /*
-        * Permitir acceso si:
-        ? 1. Es el comprador, o
-        ? 2. Es el artesano dueño del productor, o
-        ? 3. El usuario es un administrador
-        */
+    * Permitir acceso si:
+    ? 1. Es el comprador, o
+    ? 2. Es el artesano dueño del productor, o
+    ? 3. El usuario es un administrador
+    */
     const isBuyer = order.buyer.toString() === userId.toString();
     const isArtisan = order.items.some(
       (item) => item.artisan.toString() === userId.toString()
