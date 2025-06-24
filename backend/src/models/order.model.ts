@@ -18,6 +18,7 @@ interface IShippingAddress {
 
 //* Interfaz para el historial
 interface IHistory {
+  typeReference: String;
   status: String;
   changedBy: { type: Schema.Types.ObjectId; ref: "User" };
   date: Date;
@@ -31,7 +32,11 @@ interface IRequestReturn {
   requestedBy: { type: Schema.Types.ObjectId; ref: "User" };
   requestedAt: Date;
   status: String;
-  metadata: Record<string, any>
+  metadata: Record<string, any>;
+  adminComment?: string;
+  refundAmount?: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 //* Interfaz principal del pedido.
@@ -56,20 +61,27 @@ const requestReturnSchema = new Schema<IRequestReturn>(
     requestedAt: { type: Date, default: Date.now },
     status: {
       type: String,
-      enum: ["pending_review", "approved", "rejected"],
+      enum: ["pending_review", "approved", "rejected", "refunded"],
       default: "pending_review",
     },
     metadata: { type: Schema.Types.Mixed },
+    adminComment: { type: String },
+    refundAmount: { type: Number },
   },
-  { _id: false } // evita crear un _id por cada subdocumento si no lo necesitas
+  { timestamps: true }
 );
 
 const historySchema = new Schema<IHistory>(
   {
+    typeReference: {
+      type: String,
+      required: true,
+      enum: ["order", "return_request"],
+    },
     status: {
       type: String,
       required: true,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
+      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "pending_review", "approved", "rejected", "refunded"],
     },
     changedBy: {
       type: Schema.Types.ObjectId,
@@ -127,15 +139,15 @@ const orderSchema = new Schema<IOrder>(
       default: "pending",
     },
     history: [historySchema],
-    returnRequest: [requestReturnSchema],
+    returnRequest: requestReturnSchema,
     trackingNumber: { type: String },
   },
   { timestamps: true } // Agrega createdAt y updatedAt automáticamente
 );
 
 // Índices para optimizar consultas
-orderSchema.index({ buyer: 1 });
-orderSchema.index({ "items.artisan": 1 });
-orderSchema.index({ status: 1 });
+orderSchema.index({ buyer: 1 }); // Indice para buscar pedidos por usuario
+orderSchema.index({ "items.artisan": 1 }); // Indice para buscar pedidos por artesano
+orderSchema.index({ status: 1 }); // Indice para buscar pedidos por estado
 
 export const Order = model<IOrder>("Order", orderSchema);

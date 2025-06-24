@@ -40,5 +40,8 @@ export const validateReturnPeriod = async (
     }
 
     next();
-  } catch (error) {}
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al verificar el plazo de devolución" });
+  }
 };

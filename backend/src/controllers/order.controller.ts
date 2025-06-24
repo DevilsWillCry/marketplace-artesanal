@@ -14,6 +14,7 @@ import { IUserObject } from "../models/interfaces/IUserObject";
 import { IBuyerObject } from "../models/interfaces/IBuyerObject";
 import { addDays } from "../utils/dateHelpers";
 import { ObjectIdSchema } from "../validators/id.validator";
+import { generateTrackingData } from "../utils/generateTrackingData";
 
 //* Controlador para crear un nuevo pedido
 export const createOrder = async (
@@ -279,6 +280,7 @@ export const updateOrderStatus = async (
       },
       $push: {
         history: {
+          typeReference: "order",
           status,
           changedBy: req.user._id,
           date: new Date(),
@@ -359,6 +361,7 @@ export const cancelOrder = async (
         },
         $push: {
           history: {
+            typeReference: "order",
             status: "cancelled",
             changedBy: req.user._id,
             date: new Date(),
@@ -469,128 +472,4 @@ export const getOrderTracking = async (
   }
 };
 
-//* Función para simular datos de seguimiento
-const generateTrackingData = async (order: any) => {
-  const statusMap: any = {
-    pending: "En preparación",
-    processing: "En proceso",
-    shipped: "En transito",
-    delivered: "Entregado",
-    cancelled: "Cancelado",
-  };
 
-  return {
-    estimateDelivery: addDays(new Date(), 14),
-    history: [
-      {
-        date: order.createdAt,
-        status: "Confirmado",
-        location: "Tienda del artesano",
-        description: "El pedido fue recibido por el artesano",
-      },
-      {
-        date: addDays(order.createdAt, 2),
-        status: "En preparación",
-        location: "Taller artesanal",
-        description: "El artesano está preparando el pedido",
-      },
-      {
-        date: addDays(order.createdAt, 4),
-        status: "En tránsito",
-        location: "Centro logístico",
-        description: "El pedido fue entregado al transportista",
-      },
-      ...(order.status === "delivered"
-        ? [
-            {
-              date: addDays(order.createdAt, 6),
-              status: "Entregado",
-              location: "Dirección del comprador",
-              description: "El pedido fue entregado al cliente",
-            },
-          ]
-        : []),
-    ],
-  };
-};
-
-//
-export const requestReturn = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    //* 1. Validadciones
-    const { id } = req.params;
-    const validateData = ReturnOrderSchema.parse(req.body);
-    const order = await Order.findById(id);
-
-    if (!order) {
-      res.status(404).json({ error: "Pedido no encontrado" });
-      return;
-    }
-
-    //* 2. Verificar items a devolver
-    const invalidItems = validateData.items.filter(
-      (item) =>
-        !order.items.some(
-          (oi) =>
-            oi.product.toString() === item.productId &&
-            oi.quantity >= item.quantity
-        )
-    );
-
-    if (invalidItems.length > 0) {
-      res
-        .status(400)
-        .json({
-          error:
-            "Algunos productos no perteneces al pedido o no tienen suficiente stock",
-          invalidItems,
-        });
-      return;
-    }
-
-    //* 3. Crear solicitud de devolución
-    const returnRequest = ({
-      requestedBy : req.user?._id,
-      requestedAt : new Date(),
-      status: "pending_preview", //* Estados: pending_preview | approved | rejected
-      metadata: {
-       ...validateData, 
-      }
-    });
-
-    //* 4. Actualizar el pedido
-    await Order.findByIdAndUpdate(id, {
-      $push: { returnRequests: returnRequest },
-    }, { new: true });
-
-    //* 5. Enviar notificaciones
-    /*
-     ? Enviar correo al comprador
-     ? Enviar correo al artesano
-     * await notifyArtisanAndAdmin(updatedOrder)
-     */
-
-    //* 6. Respuesta
-    res.json({
-      success: true,
-      returnRequest,
-      message: "Solicitud de devolución creada exitosamente",
-      deadline: addDays(new Date(), 7).toISOString(), // Fecha limite para procesar la solicitud
-    });
-
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({
-        error: "Error en los parámetros de búsqueda",
-        details: error.errors.map((e) => ({
-          field: e.path[0],
-          message: e.message,
-        })),
-      });
-    }
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-};

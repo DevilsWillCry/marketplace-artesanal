@@ -5,7 +5,7 @@ export const adminMiddleware = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const userId = req.user?._id;
     const user = await User.findById(userId);
@@ -16,5 +16,6 @@ export const adminMiddleware = async (
     next();
   } catch (error) {
     res.status(500).json({ error: "Error al verificar permisos" });
+    return;
   }
 };
