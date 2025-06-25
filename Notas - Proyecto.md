@@ -21,6 +21,7 @@ description: Notas Backend de Marketplace Artesanal
 - [📌 Endpoints de Productos](#-endpoints-de-productos)
 - [📌 Endpoints de Autenticación](#-endpoints-de-autenticación)
 - [📌 Endpoints de Pedidos(Orders)](#-endpoints-de-pedidosorders)
+- [📌 Endpoints de reembolsos(return)](#-endpoints-de-reembolsosreturn)
 
 ----------
 ### Paso 1. Importaciones Básicas.
@@ -341,5 +342,18 @@ Base Path: /api/orders
 | PATCH | /orders/:id/status | Actualizar estado (ej. "shipped") | Privada Auth/Admin | ✅ |
 | GET | /artisans/orders | Pedidos recibidos por un artesano | Privada Auth | ✅ |
 | POST | /orders/:id/cancel | Cancelar un pedido | Privada Auth/Admin | ✅ |
-| GET | /orders/:id/tracking | Obtener el seguimiento de un pedido | Privada Auth | ✖️ |
-| POST | /orders/:id/return | Devolver un pedido pero con validación de plazo | Privada Auth/Admin | ✖️ |
+| GET | /orders/:id/tracking | Obtener el seguimiento de un pedido | Privada Auth | ✅ |
+| POST | /orders/:id/return | Devolver un pedido pero con validación de plazo | Privada Auth/Admin | ✅ |
+
+
+### 📌 Endpoints de reembolsos(return)
+Base Path: /api/returns
+
+| Método | Endpoint | Descripción | Acceso | Finalizado |
+| --- | --- | --- | --- | --- |
+| GET | /returns/:id | Obtener detalles de la solicitud de reembolso del pedido con ID | Privada Auth/admin | ✖️ |
+| POST | /returns/:id | Crear solicitud de reembolso para el pedido con ID | Privada Auth | ✅ |
+| DELETE | /return/:id | Borrar solicitud de reembolso solo si esta en ("pending_review") | Privada Auth/admin | ✖️ |
+| PATCH | /returns/:returnId/order/:id | Admin actualiza estado de la solicitud (aprobado, rechazado, etc.) | Admin | ✅ |
+| GET | /returns | Lista de solicitudes del usuario (o todas si es admin) | Privada Auth/admin | ✖️ |
+| GET | /artisans/returns | Artesano ve devoluciones relacionadas con sus productos | Privada Auth | ✖️ |

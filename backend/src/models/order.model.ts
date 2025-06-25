@@ -18,7 +18,6 @@ interface IShippingAddress {
 
 //* Interfaz para el historial
 interface IHistory {
-  typeReference: String;
   status: String;
   changedBy: { type: Schema.Types.ObjectId; ref: "User" };
   date: Date;
@@ -29,12 +28,20 @@ interface IHistory {
 
 //* Interfaz para la solicitud de devolucion
 interface IRequestReturn {
+  _id: Schema.Types.ObjectId;
   requestedBy: { type: Schema.Types.ObjectId; ref: "User" };
-  requestedAt: Date;
   status: String;
   metadata: Record<string, any>;
-  adminComment?: string;
-  refundAmount?: number;
+  history?: [
+    {
+      status:String;
+      changedBy: { type: Schema.Types.ObjectId; ref: "User" };
+      date: Date;
+      comment?: String;
+      refundAmount?: Number;
+    }
+  ];
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,7 +57,7 @@ interface IOrder extends Document {
   paymentStatus: "pending" | "paid" | "failed" | "refunded";
   trackingNumber?: string;
   history?: IHistory[];
-  returnRequest?: IRequestReturn;
+  returnRequests?: IRequestReturn[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,30 +65,28 @@ interface IOrder extends Document {
 const requestReturnSchema = new Schema<IRequestReturn>(
   {
     requestedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    requestedAt: { type: Date, default: Date.now },
     status: {
       type: String,
       enum: ["pending_review", "approved", "rejected", "refunded"],
       default: "pending_review",
     },
     metadata: { type: Schema.Types.Mixed },
-    adminComment: { type: String },
-    refundAmount: { type: Number },
+    history: {
+      type: Object,
+      default: {},
+    },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
 
 const historySchema = new Schema<IHistory>(
   {
-    typeReference: {
-      type: String,
-      required: true,
-      enum: ["order", "return_request"],
-    },
     status: {
       type: String,
       required: true,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "pending_review", "approved", "rejected", "refunded"],
+      enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
     },
     changedBy: {
       type: Schema.Types.ObjectId,
@@ -139,7 +144,7 @@ const orderSchema = new Schema<IOrder>(
       default: "pending",
     },
     history: [historySchema],
-    returnRequest: requestReturnSchema,
+    returnRequests: [requestReturnSchema],
     trackingNumber: { type: String },
   },
   { timestamps: true } // Agrega createdAt y updatedAt automáticamente

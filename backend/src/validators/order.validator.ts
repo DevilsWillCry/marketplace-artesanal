@@ -100,6 +100,7 @@ export const CancelOrderSchema = z.object({
 export const ReturnOrderSchema = z
   .object({
     reason: z.string().min(10).max(500),
+    evidencePhotos: z.array(z.string().url()).max(5).optional(),
     items: z
       .array(
         z.object({

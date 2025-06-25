@@ -280,7 +280,6 @@ export const updateOrderStatus = async (
       },
       $push: {
         history: {
-          typeReference: "order",
           status,
           changedBy: req.user._id,
           date: new Date(),
@@ -361,7 +360,6 @@ export const cancelOrder = async (
         },
         $push: {
           history: {
-            typeReference: "order",
             status: "cancelled",
             changedBy: req.user._id,
             date: new Date(),

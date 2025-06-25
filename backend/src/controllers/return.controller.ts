@@ -37,27 +37,47 @@ export const requestReturn = async (
     if (invalidItems.length > 0) {
       res.status(400).json({
         error:
-          "Algunos productos no perteneces al pedido o no tienen suficiente stock",
+          "Algunos productos no pertenecen al pedido o no tienen suficiente stock",
         invalidItems,
       });
+      return;
+    }
+
+    //* Validar si existe un pedido de devolución pendiente
+    if (
+      order.returnRequests?.some(
+        (rr) => rr.status !== "rejected" || rr.status !== "refunded"
+      )
+    ) {
+      res
+        .status(400)
+        .json({ error: "Ya existe una solicitud de devolución pendiente" });
       return;
     }
 
     //* 3. Crear solicitud de devolución
     const returnRequest = {
       requestedBy: req.user?._id,
-      requestedAt: new Date(),
-      status: "pending_preview", //* Estados: pending_preview | approved | rejected
+      status: "pending_review", //* Estados: pending_review | approved | rejected
       metadata: {
         ...validateData,
       },
+      history: [
+        {
+          status: "pending_review",
+          changedBy: req.user?._id,
+          date: new Date(),
+        },
+      ],
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     //* 4. Actualizar el pedido
     await Order.findByIdAndUpdate(
       id,
       {
-        $set: { returnRequest: returnRequest },
+        $push: { returnRequests: returnRequest },
       },
       { new: true }
     );
@@ -69,24 +89,7 @@ export const requestReturn = async (
      * await notifyArtisanAndAdmin(updatedOrder)
      */
 
-    //* 6 Actualizar history del pedido
-    await Order.findOneAndUpdate(
-      { _id: id },
-      {
-        $push: {
-          history: {
-            typeReference: "return_request",
-            status: "pending_preview",
-            changedBy: req.user?._id,
-            date: new Date(),
-            metadata: returnRequest,
-          },
-        },
-      },
-      { new: true }
-    );
-
-    //* 7. Respuesta
+    //* 6. Respuesta
     res.status(201).json({
       success: true,
       returnRequest,
@@ -103,7 +106,11 @@ export const requestReturn = async (
         })),
       });
     }
-    res.status(500).json({ error: "Error interno del servidor" });
+    res.status(500).json({
+      error:
+        error instanceof Error ? error.message : "Error interno del servidor",
+      details: error,
+    });
   }
 };
 //! -------------------------------------------------------------------------------------------------------------- !//
@@ -116,37 +123,56 @@ export const updateReturnStatus = async (req: Request, res: Response) => {
     const { id, returnId } = req.params;
     const { status, adminComment, refundAmount } =
       UpdateReturnStatusSchema.parse(req.body);
+    let refundAmountProduct = 0;
 
     //* 2. Buscar el pedido y solicitud de devolución
     const order = await Order.findOne({
       _id: id,
-      "returnRequest._id": returnId,
+      "returnRequests._id": returnId,
     });
 
-    if (!order || !order.returnRequest) {
+    if (!order || !order.returnRequests) {
       res.status(404).json({ error: "Pedido o solicitud no encontrado" });
       return;
     }
 
     //* 3. Actualizar la solicitud de devolución
-    const returnRequest = order.returnRequest;
-    returnRequest.status = status;
-    returnRequest.updatedAt = new Date();
-    returnRequest.adminComment = adminComment;
-
-    if (status === "refunded" && refundAmount) {
-      //* Funcion para reembolsar
-      returnRequest.refundAmount = refundAmount;
-      //?   await processRefund(order.paymentId, refundAmount || returnRequest.total);
-    }
-
-    console.log(
-      returnRequest.metadata.items.map((item: any) => item.productId)
+    const returnRequest = order.returnRequests.find(
+      (rr) => rr._id.toString() === returnId
     );
 
-    console.log("Entro");
-    //* 4. Revertir stock (si aplica)
-    if (status === "approved") {
+    if (!returnRequest) {
+      res.status(404).json({ error: "Solicitud de devolución no encontrada" });
+      return;
+    }
+    returnRequest.updatedAt = new Date();
+
+    if (
+      status === "refunded" &&
+      refundAmount &&
+      returnRequest.status === "approved"
+    ) {
+      //* Funcion para reembolsar
+      //* 3.1. Buscar los productos y la cantidad que se reembolsará de la solicitud
+      returnRequest.status = status;
+
+      const products = returnRequest.metadata.items;
+
+      for (const item of products) {
+        const product = await Product.findById(item.productId);
+        if (product) {
+          refundAmountProduct += item.quantity * product.price;
+        } else {
+          console.error(`Invalid productId: ${item.productId}`);
+          return;
+        }
+      }
+      //?   await processRefund(order.paymentId, refundAmount || returnRequest.total);
+    } else if (
+      status === "approved" &&
+      returnRequest.status === "pending_review"
+    ) {
+      returnRequest.status = status;
       console.log("Revirtiendo stock...");
       await Promise.all(
         returnRequest.metadata.items.map((item: Record<string, any>) => {
@@ -156,13 +182,18 @@ export const updateReturnStatus = async (req: Request, res: Response) => {
             });
           } else {
             console.error(`Invalid productId: ${item.productId}`);
-            return null;
+            return;
           }
         })
       );
+    } else {
+      res.status(400).json({
+        error: `El reembolso no se puede realizar debido al estado de la solicitud de devolución (${returnRequest.status})`,
+      });
+      return;
     }
+
     await order.save();
-    console.log("Salio");
 
     //* 5. Notificar al usuario
     /*
@@ -173,22 +204,22 @@ export const updateReturnStatus = async (req: Request, res: Response) => {
      * });
      */
 
-    //* 6 Actualizar history del pedido
-
+    //* 6 Actualizar historiy del reembolso (returnRequests.history)
     await Order.findOneAndUpdate(
-      { _id: id },
+      { _id: id, "returnRequests._id": returnId },
       {
         $push: {
-          history: {
-            typeReference: "return_request",
-            status: status,
-            changedBy: req.user?._id,
-            date: new Date(),
-            metadata: returnRequest,
+          "returnRequests.$.history": {
+            status,
+            comment: adminComment,
+            refundAmount : refundAmountProduct,
+            createdAt: new Date(),
           },
         },
       },
-      { new: true }
+      {
+        new: true,
+      }
     );
 
     //* 7. Respuesta
@@ -206,7 +237,10 @@ export const updateReturnStatus = async (req: Request, res: Response) => {
         })),
       });
     }
-     res.status(500).json({ error: error instanceof Error ? error.message : "Error interno del servidor" });
+    res.status(500).json({
+      error:
+        error instanceof Error ? error.message : "Error interno del servidor",
+    });
   }
 };
 //! -------------------------------------------------------------------------------------------------------------- !//
