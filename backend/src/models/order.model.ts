@@ -34,7 +34,7 @@ interface IRequestReturn {
   metadata: Record<string, any>;
   history?: [
     {
-      status:String;
+      status: String;
       changedBy: { type: Schema.Types.ObjectId; ref: "User" };
       date: Date;
       comment?: String;
@@ -154,5 +154,6 @@ const orderSchema = new Schema<IOrder>(
 orderSchema.index({ buyer: 1 }); // Indice para buscar pedidos por usuario
 orderSchema.index({ "items.artisan": 1 }); // Indice para buscar pedidos por artesano
 orderSchema.index({ status: 1 }); // Indice para buscar pedidos por estado
+orderSchema.index({ "returnRequests.status": 1, "returnRequests.updatedAt": -1 });
 
 export const Order = model<IOrder>("Order", orderSchema);

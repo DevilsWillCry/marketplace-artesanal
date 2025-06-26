@@ -3,7 +3,10 @@ import { z } from "zod";
 import { ReturnOrderSchema } from "../validators/order.validator";
 import { Order } from "../models/order.model";
 import { addDays } from "date-fns";
-import { UpdateReturnStatusSchema } from "../validators/return.validator";
+import {
+  ListReturnsSchema,
+  UpdateReturnStatusSchema,
+} from "../validators/return.validator";
 import { Product } from "../models/product.model";
 import { isValidObjectId, ObjectId } from "mongoose";
 
@@ -212,7 +215,7 @@ export const updateReturnStatus = async (req: Request, res: Response) => {
           "returnRequests.$.history": {
             status,
             comment: adminComment,
-            refundAmount : refundAmountProduct,
+            refundAmount: refundAmountProduct,
             createdAt: new Date(),
           },
         },
@@ -241,6 +244,220 @@ export const updateReturnStatus = async (req: Request, res: Response) => {
       error:
         error instanceof Error ? error.message : "Error interno del servidor",
     });
+  }
+};
+//! -------------------------------------------------------------------------------------------------------------- !//
+
+//! -------------------------------------------------------------------------------------------------------------- !//
+//* Controlador para obtener los detalles de una solicitud de devolución
+export const getReturnDetails = async (req: Request, res: Response) => {
+  try {
+    const returnId = req.params.id;
+    const order = await Order.findOne({
+      "returnRequests._id": returnId,
+    });
+
+    if (!order || !order.returnRequests) {
+      res.status(404).json({ error: "Solicitud de devolución no encontrada" });
+      return;
+    }
+
+    const returnRequest = order.returnRequests.find(
+      (rr) => rr._id.toString() === returnId
+    );
+
+    //* Datos adicionales (opcional)
+    const populateOrder = await Order.populate(order, [
+      {
+        path: "buyer",
+        select: "name email",
+      },
+      {
+        path: "items.product",
+        select: "name price images",
+      },
+      {
+        path: "items.artisan",
+        select: "name avatar shopName",
+      },
+    ]);
+
+    //* 3. Respuesta
+    res.status(200).json({
+      success: true,
+      returnInfo: {
+        //...returnRequest,
+        returnRequest,
+        orderId: order._id,
+        buyer: populateOrder.buyer,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: "Error en los parámetros de búsqueda",
+        details: error.errors.map((e) => ({
+          field: e.path[0],
+          message: e.message,
+        })),
+      });
+    }
+    res.status(500).json({
+      error:
+        error instanceof Error ? error.message : "Error interno del servidor",
+    });
+  }
+};
+//! -------------------------------------------------------------------------------------------------------------- !//
+
+//! -------------------------------------------------------------------------------------------------------------- !//
+//* Controlador para listar las solicitudes de devolución
+//TODO Mejorar este endpoint ya que no esta entregando los datos que debería.
+export const listReturns = async (req: Request, res: Response) => {
+  try {
+    // 1. Validar query params
+    const { page, limit, status, fromDate, toDate, artisanId } =
+      ListReturnsSchema.parse(req.query);
+    const userId = req.user?._id;
+    const isAdmin = req.user?.role === "admin";
+
+    // 2. Construir filtro base
+    const filter: any = {
+      returnRequests: { $exists: true, $not: { $size: 0 } },
+    };
+
+    // Filtros para no-admins (solo sus solicitudes)
+    if (!isAdmin) {
+      filter.buyer = userId;
+    }
+
+    // Filtros adicionales
+    if (status) {
+      filter["returnRequests.status"] = status;
+    }
+    if (artisanId && isAdmin) {
+      filter["items.artisan"] = artisanId;
+    }
+    if (fromDate || toDate) {
+      filter["returnRequests.createdAt"] = {};
+      if (fromDate)
+        filter["returnRequests.createdAt"].$gte = new Date(
+          `${fromDate}T00:00:00Z`
+        );
+      if (toDate)
+        filter["returnRequests.createdAt"].$lte = new Date(
+          `${toDate}T23:59:59Z`
+        );
+    }
+
+    // 3. Consulta con paginación (usando agregación para "desanidar" las solicitudes)
+    const result = await Order.aggregate([
+      { $match: filter },
+      { $unwind: "$returnRequests" },
+      ...(status ? [{ $match: { "returnRequests.status": status } }] : []),
+      { $sort: { "returnRequests.createdAt": -1 } },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+
+      {
+        $project: {
+          returnId: "$returnRequests._id",
+          status: "$returnRequests.status",
+          reason: "$returnRequests.metadata.reason",
+          requestedAt: "$returnRequests.createdAt",
+          orderId: "$_id",
+          total: "$total",
+          buyer: 1,
+          returnProductIds: {
+            $map: {
+              input: "$returnRequests.metadata.items",
+              as: "r",
+              in: "$$r.productId",
+            },
+          },
+          items: 1,
+        },
+      },
+      {
+        $addFields: {
+          items: {
+            $filter: {
+              input: "$items",
+              as: "item",
+              cond: {
+                $in: ["$$item.product", "$returnProductIds"],
+              },
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          items: {
+            $map: {
+              input: "$items",
+              as: "i",
+              in: {
+                product: "$$i.product",
+                quantity: "$$i.quantity",
+                price: "$$i.priceAtPurchase", 
+              },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "buyer",
+          foreignField: "_id",
+          as: "buyer",
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                email: 1,
+              },
+            },
+          ],
+        },
+      },
+      {
+        $unwind: "$buyer",
+      },
+    ]);
+
+    // 4. Contar total de solicitudes
+    const total = await Order.aggregate([
+      { $match: filter },
+      { $unwind: "$returnRequests" },
+      ...(status ? [{ $match: { "returnRequests.status": status } }] : []),
+      { $count: "total" },
+    ]).then((res) => res[0]?.total || 0);
+
+    // 5. Respuesta
+    res.json({
+      success: true,
+      data: result,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        isAdmin, // Útil para el frontend
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        error: "Error en los parámetros",
+        details: error.errors,
+      });
+      return;
+    }
+    res
+      .status(500)
+      .json({ error: "Error al listar devoluciones", details: error });
   }
 };
 //! -------------------------------------------------------------------------------------------------------------- !//
