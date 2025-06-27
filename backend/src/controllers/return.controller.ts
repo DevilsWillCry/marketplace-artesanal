@@ -8,7 +8,7 @@ import {
   UpdateReturnStatusSchema,
 } from "../validators/return.validator";
 import { Product } from "../models/product.model";
-import { isValidObjectId, ObjectId } from "mongoose";
+import mongoose, { isValidObjectId, ObjectId } from "mongoose";
 
 //! -------------------------------------------------------------------------------------------------------------- !//
 //* Controlador para solicitar devolución
@@ -315,138 +315,99 @@ export const getReturnDetails = async (req: Request, res: Response) => {
 //TODO Mejorar este endpoint ya que no esta entregando los datos que debería.
 export const listReturns = async (req: Request, res: Response) => {
   try {
-    // 1. Validar query params
+    //* 1. Validar query params
     const { page, limit, status, fromDate, toDate, artisanId } =
       ListReturnsSchema.parse(req.query);
     const userId = req.user?._id;
     const isAdmin = req.user?.role === "admin";
 
-    // 2. Construir filtro base
-    const filter: any = {
-      returnRequests: { $exists: true, $not: { $size: 0 } },
+    // Construir filtro para returnRequests
+    const returnFilter: any = {};
+    if (status) returnFilter["returnRequests.status"] = status;
+    if (fromDate || toDate) {
+      returnFilter["returnRequests.updatedAt"] = {};
+      if (fromDate) returnFilter["returnRequests.updatedAt"].$gte = new Date(`${fromDate}T00:00:00Z`);
+      if (toDate) returnFilter["returnRequests.updatedAt"].$lte = new Date(`${toDate}T23:59:59Z`);
+    }
+
+    // Filtro principal
+    const orderFilter: any = { 
+      ...returnFilter,
+      "returnRequests": { $exists: true, $ne: [] } 
     };
 
-    // Filtros para no-admins (solo sus solicitudes)
     if (!isAdmin) {
-      filter.buyer = userId;
+      // Usuarios normales ven solo sus solicitudes
+      orderFilter["returnRequests.requestedBy"] = userId;
+    } else if (artisanId) {
+      // Admins pueden filtrar por artesano
+      orderFilter["items.artisan"] = new mongoose.Types.ObjectId(artisanId);
     }
 
-    // Filtros adicionales
-    if (status) {
-      filter["returnRequests.status"] = status;
-    }
-    if (artisanId && isAdmin) {
-      filter["items.artisan"] = artisanId;
-    }
-    if (fromDate || toDate) {
-      filter["returnRequests.createdAt"] = {};
-      if (fromDate)
-        filter["returnRequests.createdAt"].$gte = new Date(
-          `${fromDate}T00:00:00Z`
-        );
-      if (toDate)
-        filter["returnRequests.createdAt"].$lte = new Date(
-          `${toDate}T23:59:59Z`
-        );
-    }
 
-    // 3. Consulta con paginación (usando agregación para "desanidar" las solicitudes)
-    const result = await Order.aggregate([
-      { $match: filter },
+    //* 3. Consulta con paginación (usando agregación para "desanidar" las solicitudes)
+        const result = await Order.aggregate([
+      { $match: orderFilter },
       { $unwind: "$returnRequests" },
-      ...(status ? [{ $match: { "returnRequests.status": status } }] : []),
-      { $sort: { "returnRequests.createdAt": -1 } },
+      { $match: isAdmin ? {} : { "returnRequests.requestedBy": userId } },
+      { $sort: { "returnRequests.updatedAt": -1 } },
       { $skip: (page - 1) * limit },
       { $limit: limit },
-
-      {
-        $project: {
+      { $lookup: {
+          from: "users",
+          localField: "buyer",
+          foreignField: "_id",
+          as: "buyer"
+      }},
+      { $unwind: "$buyer" },
+      { $project: {
           returnId: "$returnRequests._id",
           status: "$returnRequests.status",
           reason: "$returnRequests.metadata.reason",
           requestedAt: "$returnRequests.createdAt",
+          updatedAt: "$returnRequests.updatedAt",
           orderId: "$_id",
           total: "$total",
-          buyer: 1,
-          returnProductIds: {
-            $map: {
-              input: "$returnRequests.metadata.items",
-              as: "r",
-              in: "$$r.productId",
-            },
+          buyer: {
+              name: "$buyer.name",
+              email: "$buyer.email"
           },
-          items: 1,
-        },
-      },
-      {
-        $addFields: {
           items: {
-            $filter: {
-              input: "$items",
-              as: "item",
-              cond: {
-                $in: ["$$item.product", "$returnProductIds"],
-              },
-            },
+              $map: {
+                  input: "$items",
+                  as: "item",
+                  in: {
+                      productId: "$$item.product",
+                      quantity: "$$item.quantity",
+                      price: "$$item.priceAtPurchase",
+                  }
+              }
           },
-        },
-      },
-      {
-        $addFields: {
-          items: {
-            $map: {
-              input: "$items",
-              as: "i",
-              in: {
-                product: "$$i.product",
-                quantity: "$$i.quantity",
-                price: "$$i.priceAtPurchase", 
-              },
-            },
-          },
-        },
-      },
-      {
-        $lookup: {
-          from: "users",
-          localField: "buyer",
-          foreignField: "_id",
-          as: "buyer",
-          pipeline: [
-            {
-              $project: {
-                name: 1,
-                email: 1,
-              },
-            },
-          ],
-        },
-      },
-      {
-        $unwind: "$buyer",
-      },
+          history: "$returnRequests.history"
+      }}
     ]);
 
-    // 4. Contar total de solicitudes
+    //* 4. Contar total (optimizado para esquema anidado)
     const total = await Order.aggregate([
-      { $match: filter },
+      { $match: orderFilter },
       { $unwind: "$returnRequests" },
       ...(status ? [{ $match: { "returnRequests.status": status } }] : []),
-      { $count: "total" },
-    ]).then((res) => res[0]?.total || 0);
+      { $count: "total" }
+    ]).then(res => res[0]?.total || 0);
 
-    // 5. Respuesta
-    res.json({
+    //* 5. Respuesta
+    res.status(200).json({
       success: true,
       data: result,
       meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        isAdmin, // Útil para el frontend
-      },
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+          isAdmin
+      }
     });
+    
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({
